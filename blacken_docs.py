@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
-import argparse
 import contextlib
 import pathlib
 import re
 import textwrap
 import traceback
-from typing import Generator
+from typing import Generator, Set
 from typing import List
 from typing import Match
 from typing import NamedTuple
-from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
 import black
-
+import click
 
 MD_RE = re.compile(
     r"(?P<before>^(?P<indent> *)```python\n)"
@@ -102,7 +100,6 @@ def format_str(
 def format_file(
     file: pathlib.Path,
     black_mode: black.FileMode,
-    skip_errors: bool,
     report: black.Report,
 ) -> int:
     with open(file, encoding="UTF-8") as f:
@@ -111,7 +108,7 @@ def format_file(
     for error in errors:
         lineno = contents[: error.offset].count("\n") + 1
         report.failed(file, f"{file}:{lineno}: code block parse error {error.exc}")
-    if errors and not skip_errors:
+    if errors:
         return 1
     if contents != new_contents and not report.check:
         print(f"{file}: Rewriting...")
@@ -129,57 +126,99 @@ def format_file(
         report.done(file, black.Changed.NO)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-l", "--line-length", type=int, default=black.DEFAULT_LINE_LENGTH,
-    )
-    parser.add_argument(
-        "-t",
-        "--target-version",
-        action="append",
-        type=lambda v: black.TargetVersion[v.upper()],
-        default=[],
-        help=f"choices: {[v.name.lower() for v in black.TargetVersion]}",
-        dest="target_versions",
-    )
-    parser.add_argument(
-        "-S", "--skip-string-normalization", action="store_true",
-    )
-    parser.add_argument("-E", "--skip-errors", action="store_true")
-    parser.add_argument("--check", action="store_true")
-    parser.add_argument("--diff", action="store_true")
-    parser.add_argument("filenames", nargs="*", default=".")
-    args = parser.parse_args(argv)
-    copy = tuple(args.filenames)
-    args.filenames = []
-
-    for file in copy:
-        if file == ".":
-            args.filenames = [
-                p for p in pathlib.Path(__file__).parent.glob("**/*") if p.is_file()
-            ]
+def recursive_file_finder(path: pathlib.Path) -> Set[pathlib.Path]:
+    ret = set()
+    for f in path.iterdir():
+        if not f.name.endswith(('.md', '.rst', '.tex', )):
+            continue
+        if f.is_dir():
+            ret.update(
+                recursive_file_finder(f)
+            )
+        elif f.is_file():
+            ret.add(f)
         else:
-            ret = pathlib.Path(__file__).parent.joinpath(pathlib.Path(file))
-            if ret.is_dir():
-                args.filenames.extend(p for p in ret.glob("**/*") if p.is_file())
-            else:
-                args.filenames.append(ret)
+            black.err(f"invalid path: {f}")
+    return ret
 
-    black_mode = black.FileMode(
-        target_versions=args.target_versions,
-        line_length=args.line_length,
-        string_normalization=not args.skip_string_normalization,
+
+@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
+@click.option(
+    "-l",
+    "--line-length",
+    type=int,
+    default=black.DEFAULT_LINE_LENGTH,
+    help="How many characters per line to allow.",
+    show_default=True,
+)
+@click.option(
+    "-t",
+    "--target-version",
+    type=click.Choice([v.name.lower() for v in black.TargetVersion]),
+    callback=lambda c, p, v: [black.TargetVersion[val.upper()] for val in v],
+    multiple=True,
+    help=(
+        "Python versions that should be supported by Black's output. [default: per-file"
+        " auto-detection]"
+    ),
+)
+@click.option(
+    "-S",
+    "--skip-string-normalization",
+    is_flag=True,
+    help="Don't normalize string quotes or prefixes.",
+)
+@click.option(
+    "--check",
+    is_flag=True,
+    help=(
+        "Don't write the files back, just return the status.  Return code 0 means"
+        " nothing would change.  Return code 1 means some files would be reformatted."
+        " Return code 123 means there was an internal error."
+    ),
+)
+@click.option(
+    "--diff",
+    is_flag=True,
+    help="Don't write the files back, just output a diff for each file on stdout.",
+)
+@click.argument(
+    "src",
+    nargs=-1,
+    type=click.Path(
+        exists=True, file_okay=True, dir_okay=True, readable=True, allow_dash=True
+    ),
+    is_eager=True,
+)
+@click.pass_context
+def main(
+    ctx: click.Context,
+    line_length: int,
+    target_version: Set[black.TargetVersion],
+    check: bool,
+    diff: bool,
+    skip_string_normalization: bool,
+    src: Tuple[str, ...],
+) -> None:
+
+    report = black.Report(check=check, diff=diff)
+    root = black.find_project_root(src)
+    sources = recursive_file_finder(root)
+
+    black_mode = black.Mode(
+        target_versions=target_version,
+        line_length=line_length,
+        string_normalization=not skip_string_normalization,
     )
-    report = black.Report(check=args.check)
-    report.diff = args.diff
 
-    for filename in args.filenames:
-        format_file(filename, black_mode, skip_errors=args.skip_errors, report=report)
+    for filename in sources:
+        format_file(filename, black_mode, report=report)
     print("Oh no! 💥 💔 💥" if report.return_code else "All done! ✨ 🍰 ✨")
     print(str(report))
-    return report.return_code
+    ctx.exit(report.return_code)
 
 
 if __name__ == "__main__":
-    exit(main())
+    black.freeze_support()
+    black.patch_click()
+    main()
