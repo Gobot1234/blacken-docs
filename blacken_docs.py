@@ -98,9 +98,7 @@ def format_str(
 
 
 def format_file(
-    file: pathlib.Path,
-    black_mode: black.FileMode,
-    report: black.Report,
+    file: pathlib.Path, black_mode: black.FileMode, report: black.Report,
 ) -> int:
     with open(file, encoding="UTF-8") as f:
         contents = f.read()
@@ -129,12 +127,10 @@ def format_file(
 def recursive_file_finder(path: pathlib.Path) -> Set[pathlib.Path]:
     ret = set()
     for f in path.iterdir():
-        if not f.name.endswith(('.md', '.rst', '.tex', )):
+        if not f.name.endswith((".md", ".rst", ".tex",)):
             continue
         if f.is_dir():
-            ret.update(
-                recursive_file_finder(f)
-            )
+            ret.update(recursive_file_finder(f))
         elif f.is_file():
             ret.add(f)
         else:
