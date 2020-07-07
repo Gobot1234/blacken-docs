@@ -5,6 +5,8 @@ import blacken_docs
 
 BLACK_MODE = black.FileMode(line_length=black.DEFAULT_LINE_LENGTH)
 
+# fmt: off
+
 
 def test_format_src_trivial():
     after, _ = blacken_docs.format_str('', BLACK_MODE)
@@ -78,7 +80,7 @@ def test_format_src_latex_minted():
 
 
 def test_format_src_latex_minted_indented():
-    # Personaly I would have minted python code all flush left,
+    # Personally I would have minted python code all flush left,
     # with only the Python code's own four space indentation:
     before = (
         'hello\n'
@@ -99,7 +101,7 @@ def test_format_src_latex_minted_indented():
     )
 
 
-def test_src_pythontex(tmpdir):
+def test_src_pythontex():
     before = (
         'hello\n'
         '\\begin{pyblock}\n'
