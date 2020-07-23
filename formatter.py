@@ -39,11 +39,11 @@ STARTING_LINE_WS = re.compile(rf'^({"|".join(_MULTIPLES)}) (\w)', re.M)
 
 # need to get the rst prolog and use those
 
+
 def is_not_fully_wrapped(string: str):
     if len(string) > 4:
         return (
-                string.startswith("`") and string.endswith("`") and not (
-                    string.startswith("``") and string.endswith("``"))
+            string.startswith("`") and string.endswith("`") and not (string.startswith("``") and string.endswith("``"))
         )
 
     return False
