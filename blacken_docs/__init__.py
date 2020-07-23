@@ -35,7 +35,7 @@ def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, Sequence[CodeBl
 
 
 def format_py_file(path: pathlib.Path, *, mode: black.Mode, report: black.Report):
-    path = path.absolute()
+    path = path.as_posix()
     file = importlib.import_module(path)
     original = open(path).read()
 
@@ -65,7 +65,7 @@ def format_py_file(path: pathlib.Path, *, mode: black.Mode, report: black.Report
 
 
 def format_rst_file(path: pathlib.Path, *, mode: black.Mode):
-    original = open(path.absolute()).read()
+    original = open(path.as_posix()).read()
     return format_str(original, mode=mode)
 
 
