@@ -1,3 +1,5 @@
 from setuptools import setup
 
-setup(requirements=['black'])
+setup(
+    requirements=["black"], packages=["blacken_docs",],
+)
