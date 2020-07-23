@@ -6,12 +6,13 @@ import pathlib
 import re
 import textwrap
 import traceback
-from formatter import blacken_code_blocks, fix_inline, wrap_text
-from types import FunctionType, MethodType
+from types import FunctionType
 from typing import List, NamedTuple, Sequence, Set, Tuple
 
 import black
 import click
+
+from .formatter import blacken_code_blocks, fix_inline, wrap_text
 
 
 class CodeBlockError(NamedTuple):
