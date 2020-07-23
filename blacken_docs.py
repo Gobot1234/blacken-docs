@@ -42,6 +42,8 @@ def format_py_file(path: pathlib.Path, *, mode: black.Mode, report: black.Report
         black.reformat_one(
             src=path, fast=False, write_back=black.WriteBack.YES, mode=mode, report=report,
         )
+        for _, attr in inspect.getmembers(obj):
+            format_object(attr, indent + 4)
         to_format = inspect.getdoc(obj)
         formatted = format_str(to_format, mode=mode)
         current = open(path).read()
@@ -50,13 +52,11 @@ def format_py_file(path: pathlib.Path, *, mode: black.Mode, report: black.Report
         to_write = current.replace(search.group(1), final)
         open(path, "w+").write(to_write)
 
-    for name, attr in inspect.getmembers(file):  # needs to be recursive
+    for _, attr in inspect.getmembers(file):  # needs to be recursive
         if isinstance(attr, FunctionType):
             format_object(attr, indent=4)
         elif inspect.isclass(attr):
-            for name, attr in inspect.getmembers(attr):
-                if isinstance(attr, MethodType):
-                    format_object(attr, indent=8)
+            format_object(attr)
 
     new = open(path).read()
     open(path, "w+").write(original)
