@@ -177,7 +177,11 @@ def main(
     ctx.exit(report.return_code)
 
 
-if __name__ == "__main__":
+def patched_main():
     black.freeze_support()
     black.patch_click()
     main()
+
+
+if __name__ == "__main__":
+    patched_main()
