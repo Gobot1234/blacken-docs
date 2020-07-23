@@ -57,7 +57,7 @@ def format_py_file(path: pathlib.Path, *, mode: black.Mode, report: black.Report
         if isinstance(attr, FunctionType):
             format_object(attr, indent=4)
         elif inspect.isclass(attr):
-            format_object(attr)
+            format_object(attr, indent=4)
 
     new = open(path).read()
     open(path, "w+").write(original)
