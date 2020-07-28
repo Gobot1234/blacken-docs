@@ -8,7 +8,8 @@ from typing import Tuple
 import string as _string
 
 import black
-
+from docutils import nodes, utils
+from docutils.core import Publisher
 
 PY_LANGS = ("python", "py", "sage", "python3", "py3", "numpy")
 BLOCK_TYPES = ("code", "code-block", "sourcecode", "ipython")
@@ -24,7 +25,7 @@ TYPES = tuple(
 INLINE_WRAPPED_TYPES = ("\d+", "None", "NoneType", "True", "False") + EXCEPTIONS + TYPES
 PUNCTUATION = tuple(_string.punctuation)
 
-RST_RE = re.compile(
+RST_RE = re.compile(  # needs to ignore sphinx directives
     rf"(?P<before>(?:\S|\s)*"
     rf"(?:jupyter-execute::|(?:{'|'.join(BLOCK_TYPES)}|.*))"
     rf"(?:{'::|'.join(PY_LANGS)}::|::\s)"
@@ -96,31 +97,18 @@ def wrap_text(string: str, mode: black.Mode):  # take up as little vertical spac
     return STARTING_LINE_WS.sub(r"\1\2", string).strip()
 
 
-def blacken_code_blocks(string: str, *, mode: black.Mode) -> str:
-    search = RST_RE.search(string)
-    if search is None:  # nothing to do
-        return string
+def blacken_code_blocks(code: str, *, mode: black.Mode) -> str:
+    return textwrap.indent(black.format_str(textwrap.dedent(code), mode=mode), prefix="    ")
+    # TODO add support for ">>> " and "... "
 
-    mode.line_length -= 4
 
-    def code_formatter(string: str) -> Tuple[str, str, str]:
-        search = RST_RE.search(string)
-        if search is None:
-            return string, "", ""
-        code = search.group("indent") + search.group("code")
-        return (
-            search.group("before"),
-            textwrap.indent(black.format_str(textwrap.dedent(code), mode=mode), prefix="    "),
-            # TODO add support for ">>> " and "... "
-            search.group("after"),
-        )
-
-    ret = []
-    old_before = search.group("before")
-    new_before, code, after = code_formatter(string)
-    ret.append((new_before, code, after))
-    while new_before != old_before:
-        new_before, code, after = code_formatter(new_before)
-        ret.append((new_before, code, after))
-    mode.line_length += 4
-    return "".join(f"{i}{j}{k}" for i, j, k in reversed(ret))
+def generate_doc(content: str) -> nodes.document:
+    pub = Publisher(None, None, None, settings=None)
+    pub.set_components("standalone", "restructuredtext", "pseudoxml")
+    settings = pub.get_settings(halt_level=5)
+    pub.set_io()
+    reader = pub.reader
+    document = utils.new_document(None, settings)
+    document.reporter.stream = None
+    reader.parser.parse(content, document)
+    return document

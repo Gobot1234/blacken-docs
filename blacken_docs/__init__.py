@@ -7,31 +7,49 @@ import re
 import textwrap
 import traceback
 from types import FunctionType
-from typing import List, NamedTuple, Sequence, Set, Tuple
+from typing import List, NamedTuple, Set, Tuple
 
 import black
 import click
+import restructuredtext_lint
+from docutils import nodes
+from docutils.nodes import system_message
 
-from .formatter import blacken_code_blocks, fix_inline, wrap_text
+from blacken_docs.formatter import blacken_code_blocks, fix_inline, wrap_text
 
 
 class CodeBlockError(NamedTuple):
+    line_number: int
     src: str
     exc: Exception
 
 
-def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, Sequence[CodeBlockError]]:
+def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, List[CodeBlockError]]:
     errors: List[CodeBlockError] = []
-    mode.line_length -= 4  # adjust for tabs
+    ret = []
     try:
-        src = blacken_code_blocks(src, mode=mode)
-        src = wrap_text(src, mode=mode)
-        src = fix_inline(src)
-        src = textwrap.dedent(f" {src}")
+        for error in restructuredtext_lint.lint(src):
+            errors.append(CodeBlockError(error.line, error.astext(), Exception()))
+        if errors:  # don't proceed further
+            return src, errors
+
+        doc = formatter.generate_doc(src)
+        for child in doc.children:
+            text = child.astext()
+            if isinstance(child, nodes.literal_block):  # code block
+                text = blacken_code_blocks(text, mode=mode)
+            if isinstance(child, nodes.section):
+                text_start = src.find(text.splitlines()[0])  # need to preserve underlines
+                text_end = src.find(text.splitlines()[2])
+                text = src[text_start:] + "\n\n" + src[:text_end] + "\n" + "\n".join(text.splitlines()[2:])
+                text = wrap_text(text, mode=mode)
+                text = fix_inline(text)
+            ret.append(text)
     except Exception as exc:
-        errors.append(CodeBlockError(src, exc))
+        traceback.print_exc()
+        errors.append(CodeBlockError(exc.__traceback__.tb_lineno, src, exc))
     finally:
-        return src, errors
+        return "\n".join(ret), errors
 
 
 def format_py_file(path: pathlib.Path, *, mode: black.Mode, report: black.Report):
@@ -74,6 +92,7 @@ def format_file(file: pathlib.Path, mode: black.FileMode, report: black.Report,)
         original = f.read()
 
     if file.name.endswith(".py"):
+        print('file ends in .py')
         new_contents, errors = format_py_file(file, mode=mode, report=report)
     else:
         new_contents, errors = format_rst_file(file, mode=mode)
@@ -184,4 +203,5 @@ def patched_main():
 
 
 if __name__ == "__main__":
-    patched_main()
+    print('Running')
+    print(format_rst_file(pathlib.Path('/Users/James/PycharmProjects/steam-copy.py/steam/__init__.py'), mode=black.Mode(line_length=120))[0])
