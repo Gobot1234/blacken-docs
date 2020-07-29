@@ -4,7 +4,6 @@ import builtins
 import inspect
 import re
 import textwrap
-from typing import Tuple
 import string as _string
 
 import black
@@ -24,20 +23,44 @@ TYPES = tuple(
 )
 INLINE_WRAPPED_TYPES = ("\d+", "None", "NoneType", "True", "False") + EXCEPTIONS + TYPES
 PUNCTUATION = tuple(_string.punctuation)
-
-RST_RE = re.compile(  # needs to ignore sphinx directives
-    rf"(?P<before>(?:\S|\s)*"
-    rf"(?:jupyter-execute::|(?:{'|'.join(BLOCK_TYPES)}|.*))"
-    rf"(?:{'::|'.join(PY_LANGS)}::|::\s)"
-    rf"(?:[-+=]*))"
-    rf"(?P<indent>\s*)(?P<code>(?:\s|\S)*)^"
-    rf"(?P<after>(?:.+|\s)*)",
-    re.M,
-)
 _MULTIPLES = [
     "\s{" + str(i) + "}" for i in range(0, 32, 4)
 ]  # why would you realistically go higher than this in a docstring?
 STARTING_LINE_WS = re.compile(rf'^({"|".join(_MULTIPLES)}) (\w)', re.M)
+POSSIBLE_TITLES = (
+    "Args",
+    "Arguments",
+    "Attention",
+    "Attributes",
+    "Caution",
+    "Danger",
+    "Error",
+    "Example",
+    "Examples",
+    "Hint",
+    "Important",
+    "Keyword Args",
+    "Keyword Arguments",
+    "Methods",
+    "Note",
+    "Notes",
+    "Other Parameters",
+    "Parameters",
+    "Return",
+    "Returns",
+    "Raise",
+    "Raises",
+    "References",
+    "See Also",
+    "Tip",
+    "Todo",
+    "Warning",
+    "Warnings",
+    "Warn",
+    "Warns",
+    "Yield",
+    "Yields",
+)
 
 
 # need to get the rst prolog and use those
@@ -52,8 +75,8 @@ def is_not_fully_wrapped(string: str):
     return False
 
 
-FIND_NOT_INLINE_TYPES = re.compile(rf"^({'|'.join(INLINE_WRAPPED_TYPES)})[^()]$")
-FIND_INLINE_TYPES = re.compile(rf"^``({'|'.join(INLINE_WRAPPED_TYPES)})``$")
+FIND_NOT_INLINE_TYPES = re.compile(rf"^({'|'.join(INLINE_WRAPPED_TYPES)})\W?$")
+FIND_INLINE_TYPES = re.compile(rf"^``({'|'.join(INLINE_WRAPPED_TYPES)})``\W?$")
 
 
 def fix_inline(string: str) -> str:
@@ -62,12 +85,13 @@ def fix_inline(string: str) -> str:
         for word in line.split(" "):
             if FIND_NOT_INLINE_TYPES.match(word):  # general match
                 if not FIND_INLINE_TYPES.match(word):  # strict match
-                    word = FIND_NOT_INLINE_TYPES.sub(r"``\1``", word.strip("``"))
+                    word = FIND_NOT_INLINE_TYPES.sub(r"``\1``", word.strip("`"))
             if is_not_fully_wrapped(word):  # simple fix
                 word = f"``{word.strip('`')}``"
             formatted.append(word)
 
-    return "\n".join(line for line in " ".join(formatted).splitlines())
+    text = "\n".join(" ".join(formatted).splitlines())
+    return textwrap.dedent(f" {text}")  # don't why ask
 
 
 def wrap_text(string: str, mode: black.Mode):  # take up as little vertical space as possible
@@ -94,15 +118,16 @@ def wrap_text(string: str, mode: black.Mode):  # take up as little vertical spac
 
     string = textwrap.fill("\n".join(ret.values()), width=mode.line_length)
     string = string.replace("  ", "\n").replace("\u000E", "\n    ").replace("\u000F", "\n\n\n")
-    return STARTING_LINE_WS.sub(r"\1\2", string).strip()
+    return STARTING_LINE_WS.sub(r"\1\2", string)
 
 
-def blacken_code_blocks(code: str, *, mode: black.Mode) -> str:
-    return textwrap.indent(black.format_str(textwrap.dedent(code), mode=mode), prefix="    ")
+def blacken_code_blocks(code: str, *, mode: black.Mode, indent=4) -> str:
+    return textwrap.indent(black.format_str(textwrap.dedent(code), mode=mode), prefix=" " * indent)
     # TODO add support for ">>> " and "... "
 
 
-def generate_doc(content: str) -> nodes.document:
+def generate_doc(content: str) -> nodes.document:  # restructuredtext_lint.lint
+    """Return a nodes.document ready for reading from."""
     pub = Publisher(None, None, None, settings=None)
     pub.set_components("standalone", "restructuredtext", "pseudoxml")
     settings = pub.get_settings(halt_level=5)
@@ -112,3 +137,15 @@ def generate_doc(content: str) -> nodes.document:
     document.reporter.stream = None
     reader.parser.parse(content, document)
     return document
+
+
+def wrap_and_fix(text: str, *, mode: black.Mode, indent: int = None) -> str:
+    if indent is not None:
+        mode.line_length -= indent
+    text = fix_inline(text)
+    text = wrap_text(text, mode=mode)
+
+    if indent is not None:
+        mode.line_length += indent
+        return textwrap.indent(text, prefix=" " * indent)
+    return text

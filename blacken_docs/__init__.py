@@ -7,7 +7,7 @@ import re
 import textwrap
 import traceback
 from types import FunctionType
-from typing import List, NamedTuple, Set, Tuple
+from typing import List, NamedTuple, Set, Tuple, Union
 
 import black
 import click
@@ -26,7 +26,6 @@ class CodeBlockError(NamedTuple):
 
 def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, List[CodeBlockError]]:
     errors: List[CodeBlockError] = []
-    ret = []
     try:
         for error in restructuredtext_lint.lint(src):
             errors.append(CodeBlockError(error.line, error.astext(), Exception()))
@@ -34,22 +33,50 @@ def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, List[CodeBlockE
             return src, errors
 
         doc = formatter.generate_doc(src)
-        for child in doc.children:
-            text = child.astext()
-            if isinstance(child, nodes.literal_block):  # code block
-                text = blacken_code_blocks(text, mode=mode)
-            if isinstance(child, nodes.section):
-                text_start = src.find(text.splitlines()[0])  # need to preserve underlines
-                text_end = src.find(text.splitlines()[2])
-                text = src[text_start:] + "\n\n" + src[:text_end] + "\n" + "\n".join(text.splitlines()[2:])
-                text = wrap_text(text, mode=mode)
-                text = fix_inline(text)
-            ret.append(text)
+
+        def recursive_iter(doc: Union[nodes.Node]):
+            ret = []
+            for child in doc.children:
+                text: str = child.astext()
+                print('top level', child.__class__, repr(child), repr(text))
+
+                if isinstance(child, nodes.section):  # iter over its children
+                    for grand_child in child.children:
+                        text = recursive_iter(grand_child)
+                        ret.append(text)
+                    continue
+                elif isinstance(child, nodes.definition_list_item):
+                    # definition_list_item is the param type like Optional[T] ...
+                    split = text.splitlines()
+                    type_ = split[0]
+                    other = "\n".join(split[1:])
+                    fixed = formatter.wrap_and_fix(other, mode=mode, indent=4)
+                    text = f"{type_}\n{fixed}\n"
+
+                elif isinstance(child, nodes.Text):
+                    if text in formatter.POSSIBLE_TITLES:
+                        text = f'{text}\n{"-" * (len(text) + 1)}'
+                    else:  # gonna assume its a codeblock
+                        try:
+                            text = blacken_code_blocks(text, mode=mode)
+                            # needs to check append " ::\n" to the previous element TODO
+                        except black.InvalidInput:
+                            # likely not a code block need to find a better way to do this TODO
+                            text = formatter.wrap_and_fix(text, mode=mode)
+
+                elif isinstance(child, nodes.literal_block):  # code block
+                    text = blacken_code_blocks(text, mode=mode)
+
+                elif isinstance(child, nodes.paragraph):
+                    text = formatter.wrap_and_fix(text, mode=mode)
+                ret.append(text)
+            return "\n".join(ret)
+        ret = recursive_iter(doc)
     except Exception as exc:
         traceback.print_exc()
         errors.append(CodeBlockError(exc.__traceback__.tb_lineno, src, exc))
     finally:
-        return "\n".join(ret), errors
+        return ret.strip(), errors
 
 
 def format_py_file(path: pathlib.Path, *, mode: black.Mode, report: black.Report):
