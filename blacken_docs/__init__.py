@@ -38,7 +38,7 @@ def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, List[CodeBlockE
             ret = []
             for child in doc.children:
                 text: str = child.astext()
-                print('top level', child.__class__, repr(child), repr(text))
+                # print("top level", child.__class__, repr(child), repr(text))
 
                 if isinstance(child, nodes.section):  # iter over its children
                     for grand_child in child.children:
@@ -71,6 +71,7 @@ def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, List[CodeBlockE
                     text = formatter.wrap_and_fix(text, mode=mode)
                 ret.append(text)
             return "\n".join(ret)
+
         ret = recursive_iter(doc)
     except Exception as exc:
         traceback.print_exc()
@@ -119,7 +120,6 @@ def format_file(file: pathlib.Path, mode: black.FileMode, report: black.Report,)
         original = f.read()
 
     if file.name.endswith(".py"):
-        print('file ends in .py')
         new_contents, errors = format_py_file(file, mode=mode, report=report)
     else:
         new_contents, errors = format_rst_file(file, mode=mode)
@@ -227,8 +227,3 @@ def patched_main():
     black.freeze_support()
     black.patch_click()
     main()
-
-
-if __name__ == "__main__":
-    print('Running')
-    print(format_rst_file(pathlib.Path('/Users/James/PycharmProjects/steam-copy.py/steam/__init__.py'), mode=black.Mode(line_length=120))[0])
