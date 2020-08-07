@@ -99,9 +99,8 @@ def wrap_text(string: str, mode: black.Mode):  # take up as little vertical spac
     # maximum space = 1
     # full stops at the end of every sentence if not tabbed.
     # spaces after any pre added punctuation
-    ret = {}
+    """ret = {}
     last_line = " "
-    string = string.replace("    ", "\u000E")  # for preserving tabs
     string = re.sub(r"^\n{2,}$", "\n\n", string, re.M)  # preserve a max of 2 new lines
     string = re.sub(r"\n{3}", "\u000F", string)
     for idx, line in enumerate(string.splitlines()):
@@ -116,8 +115,11 @@ def wrap_text(string: str, mode: black.Mode):  # take up as little vertical spac
         last_line = line
         ret[idx] = line
 
-    string = textwrap.fill("\n".join(ret.values()), width=mode.line_length)
-    string = string.replace("  ", "\n").replace("\u000E", "\n    ").replace("\u000F", "\n\n\n")
+    """
+    # FIXME
+    return textwrap.fill(string, width=mode.line_length)
+    string = textwrap.fill(string, width=mode.line_length)
+    string = string.replace("  ", "\n").replace("\u000F", "\n\n\n")
     return STARTING_LINE_WS.sub(r"\1\2", string)
 
 

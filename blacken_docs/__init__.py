@@ -34,7 +34,7 @@ def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, List[CodeBlockE
 
         doc = formatter.generate_doc(src)
 
-        def recursive_iter(doc: Union[nodes.Node]):
+        def recursive_iter(doc: Union[nodes.document]):
             ret = []
             for child in doc.children:
                 text: str = child.astext()
@@ -46,7 +46,7 @@ def format_str(src: str, *, mode: black.FileMode,) -> Tuple[str, List[CodeBlockE
                         ret.append(text)
                     continue
                 elif isinstance(child, nodes.definition_list_item):
-                    # definition_list_item is the param type like Optional[T] ...
+                    # definition_list_item is the param type like Optional[int] ...
                     split = text.splitlines()
                     type_ = split[0]
                     other = "\n".join(split[1:])
